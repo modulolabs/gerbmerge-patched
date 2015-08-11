@@ -72,7 +72,7 @@ Options:
     --place-file=fn     -- Read placement from file
     --rs-fsjobs=N       -- When using random search, exhaustively search N jobs
                            for each random placement (default: N=2)
-    --search-timeout=T  -- When using random search, search for T seconds for best 
+    --search-timeout=T  -- When using random search, search for T seconds for best
                            random placement (default: T=0, search until stopped)
     --no-trim-gerber    -- Do not attempt to trim Gerber data to extents of board
     --no-trim-excellon  -- Do not attempt to trim Excellon data to extents of board
@@ -142,14 +142,19 @@ def writeApertures(fid, usedDict):
 def writeGerberFooter(fid):
   fid.write('M02*\n')
 
-def writeExcellonHeader(fid):
+def writeExcellonHeader(fid, tools):
   fid.write('%\n')
+  for tool in tools :
+    size = config.GlobalToolMap[tool]
+    fid.write('%sC%f\n' % (tool, size))
+  fid.write('%\n')
+
 
 def writeExcellonFooter(fid):
   fid.write('M30\n')
 
 def writeExcellonTool(fid, tool, size):
-  fid.write('%sC%f\n' % (tool, size))
+  fid.write('%s\n' % tool)
 
 def writeFiducials(fid, drawcode, OriginX, OriginY, MaxXExtent, MaxYExtent):
   """Place fiducials at arbitrary points. The FiducialPoints list in the config specifies
@@ -186,7 +191,7 @@ def writeOutline(fid, OriginX, OriginY, MaxXExtent, MaxYExtent):
   fid.write('X%07dY%07dD01*\n' % (util.in2gerb(MaxXExtent), util.in2gerb(MaxYExtent)))  # Top-right
   fid.write('X%07dY%07dD01*\n' % (util.in2gerb(MaxXExtent), util.in2gerb(OriginY)))     # Bottom-right
   fid.write('X%07dY%07dD01*\n' % (util.in2gerb(OriginX), util.in2gerb(OriginY)))        # Bottom-left
-      
+
 
 def writeCropMarks(fid, drawing_code, OriginX, OriginY, MaxXExtent, MaxYExtent):
   """Add corner crop marks on the given layer"""
@@ -296,10 +301,10 @@ def tile_jobs(Jobs):
 
 def merge(opts, args, gui = None):
   writeGerberHeader = writeGerberHeader22degrees
-  
+
   global GUI
   GUI = gui
-  
+
   for opt, arg in opts:
     if opt in ('--octagons',):
       if arg=='rotate':
@@ -340,7 +345,7 @@ def merge(opts, args, gui = None):
 
   if len(args) > 2 or len(args) < 1:
     raise RuntimeError, 'Invalid number of arguments'
-    
+
   # Load up the Jobs global dictionary, also filling out GAT, the
   # global aperture table and GAMT, the global aperture macro table.
   updateGUI("Reading job files...")
@@ -355,7 +360,7 @@ def merge(opts, args, gui = None):
     if (shift_x > 0) or (shift_y > 0):
       job.fixcoordinates( shift_x, shift_y )
 
-  # Display job properties                                                                
+  # Display job properties
   for job in config.Jobs.values():
     print 'Job %s:' % job.name,
     if job.Repeat > 1:
@@ -501,7 +506,7 @@ def merge(opts, args, gui = None):
     #print 'Writing %s ...' % fullname
     fid = file(fullname, 'wt')
     writeGerberHeader(fid)
-    
+
     # Determine which apertures and macros are truly needed
     apUsedDict = {}
     apmUsedDict = {}
@@ -510,11 +515,11 @@ def merge(opts, args, gui = None):
       apUsedDict.update(apd)
       apmUsedDict.update(apmd)
 
-    # Increase aperature sizes to match minimum feature dimension                         
+    # Increase aperature sizes to match minimum feature dimension
     if config.MinimumFeatureDimension.has_key(layername):
-    
+
       print '  Thickening', lname, 'feature dimensions ...'
-      
+
       # Fix each aperture used in this layer
       for ap in apUsedDict.keys():
         new = config.GAT[ap].getAdjusted( config.MinimumFeatureDimension[layername] )
@@ -524,10 +529,10 @@ def merge(opts, args, gui = None):
           new_code = aptable.findOrAddAperture(new) ## get name of existing aperture or create new one if needed
           del apUsedDict[ap]                        ## the old aperture is no longer used in this layer
           apUsedDict[new_code] = None               ## the new aperture will be used in this layer
-     
+
           # Replace all references to the old aperture with the new one
           for joblayout in Place.jobs:
-            job = joblayout.job ##access job inside job layout 
+            job = joblayout.job ##access job inside job layout
             temp = []
             if job.hasLayer(layername):
               for x in job.commands[layername]:
@@ -542,7 +547,7 @@ def merge(opts, args, gui = None):
 
     if config.Config['cropmarklayers'] and (layername in config.Config['cropmarklayers']):
       apUsedDict[drawing_code_crop]=None
-      
+
     if config.Config['fiducialpoints']:
       if ((layername=='*toplayer') or (layername=='*bottomlayer')):
         apUsedDict[drawing_code_fiducial_copper] = None
@@ -566,7 +571,7 @@ def merge(opts, args, gui = None):
 
     # Finally, write actual flash data
     for job in Place.jobs:
-    
+
       updateGUI("Writing merged output files...")
       job.writeGerber(fid, layername)
 
@@ -594,7 +599,7 @@ def merge(opts, args, gui = None):
       fid.write('%s*\n' % drawing_code_text)    # Choose drawing aperture
       makestroke.writeString(fid, config.text, int(util.mil2gerb(x)), int(util.mil2gerb(y)), 0, int(text_size))
     writeGerberFooter(fid)
-       
+
     fid.close()
 
   # Write board outline layer if selected
@@ -676,7 +681,7 @@ def merge(opts, args, gui = None):
 
     # Tools is just a list of tool names
     Tools = config.GlobalToolMap.keys()
-    Tools.sort()   
+    Tools.sort()
 
   fullname = config.Config['fabricationdrawingfile']
   if fullname and fullname.lower() != 'none':
@@ -694,7 +699,7 @@ def merge(opts, args, gui = None):
 
     writeGerberFooter(fid)
     fid.close()
-    
+
   # Finally, print out the Excellon
   try:
     fullname = config.MergeOutputFiles['drills']
@@ -704,7 +709,7 @@ def merge(opts, args, gui = None):
   #print 'Writing %s ...' % fullname
   fid = file(fullname, 'wt')
 
-  writeExcellonHeader(fid)
+  writeExcellonHeader(fid, Tools)
 
   # Ensure each one of our tools is represented in the tool list specified
   # by the user.
@@ -713,17 +718,17 @@ def merge(opts, args, gui = None):
       size = config.GlobalToolMap[tool]
     except:
       raise RuntimeError, "INTERNAL ERROR: Tool code %s not found in global tool map" % tool
-      
+
     writeExcellonTool(fid, tool, size)
 
     #for row in Layout:
     #  row.writeExcellon(fid, size)
     for job in Place.jobs:
         job.writeExcellon(fid, size)
-  
+
   writeExcellonFooter(fid)
   fid.close()
-  
+
   updateGUI("Closing files...")
 
   # Compute stats
@@ -732,7 +737,7 @@ def merge(opts, args, gui = None):
   #  jobarea += row.jobarea()
   for job in Place.jobs:
     jobarea += job.jobarea()
-    
+
   totalarea = ((MaxXExtent-OriginX)*(MaxYExtent-OriginY))
 
   ToolStats = {}
@@ -800,7 +805,7 @@ if __name__=="__main__":
     opts, args = getopt.getopt(sys.argv[1:], 'hv', ['help', 'version', 'octagons=', 'random-search', 'full-search', 'rs-fsjobs=', 'search-timeout=', 'place-file=', 'no-trim-gerber', 'no-trim-excellon', 'text=', 'text-size=', 'text-stroke=', 'text-x=', 'text-y=', 'ack'])
   except getopt.GetoptError:
     usage()
-    
+
   for opt, arg in opts:
     if opt in ('-h', '--help'):
       usage()
@@ -824,6 +829,6 @@ http://ruggedcircuits.com/gerbmerge
     usage()
 
   disclaimer(ack = ('--ack', '') in opts)
-  
+
   sys.exit(merge(opts, args)) ## run germberge
 # vim: expandtab ts=2 sw=2 ai syntax=python
